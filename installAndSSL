@@ -1,0 +1,98 @@
+# 1. 아파치 설치
+yum install -y httpd-devel
+
+
+# 2. 방화벽 설정
+firewall-cmd --permanent --zone=public --add-port=80/tcp
+firewall-cmd --permanent --zone=public --add-port=443/tcp
+firewall-cmd --reload
+
+
+# 3. HTTPS 인증서에 필요한 패키지 설치
+yum install -y mod_ssl openssl
+
+
+# 4. 인증서 생성 후 지정된 위치에 복사
+openssl genrsa -out ssl.key 2048
+openssl req -new -key ssl.key -out ssl.csr
+openssl x509 -req -days 365 -in ssl.csr -signkey ssl.key -out ssl.crt
+cp ssl.crt /etc/pki/tls/certs
+cp ssl.key /etc/pki/tls/private/ssl.key
+cp ssl.csr /etc/pki/tls/private/ssl.csr
+
+
+# 5. httpd.conf 파일만들기
+touch httpd.conf
+echo 'NameVirtualHost *:443' >> httpd.conf
+echo '<VirtualHost *:443>' >> httpd.conf
+echo '  ServerName localhost' >> httpd.conf
+echo '  SSLEngine on' >> httpd.conf
+echo '  SSLCertificateFile /etc/pki/tls/certs/ssl.crt' >> httpd.conf
+echo '  SSLCertificateKeyFile /etc/pki/tls/private/ssl.key' >> httpd.conf
+echo '</VirtualHost>' >> httpd.conf
+echo 'ServerRoot "/etc/httpd"' >> httpd.conf
+echo 'Listen 80' >> httpd.conf
+echo 'Include conf.modules.d/*.conf' >> httpd.conf
+echo 'User apache' >> httpd.conf
+echo 'Group apache' >> httpd.conf
+echo 'ServerAdmin root@localhost' >> httpd.conf
+echo '<Directory />' >> httpd.conf
+echo '    AllowOverride none' >> httpd.conf
+echo '    Require all granted' >> httpd.conf
+echo '</Directory>' >> httpd.conf
+echo 'DocumentRoot "/var/www/html"' >> httpd.conf
+echo '<Directory "/var/www">' >> httpd.conf
+echo '    AllowOverride None' >> httpd.conf
+echo '    Require all granted' >> httpd.conf
+echo '</Directory>' >> httpd.conf
+echo '<Directory "/var/www/html">' >> httpd.conf
+echo '    Options Indexes FollowSymLinks' >> httpd.conf
+echo '    AllowOverride None' >> httpd.conf
+echo '    Require all granted' >> httpd.conf
+echo '</Directory>' >> httpd.conf
+echo '<IfModule dir_module>' >> httpd.conf
+echo '    DirectoryIndex index.html' >> httpd.conf
+echo '</IfModule>' >> httpd.conf
+echo '<Files ".ht*">' >> httpd.conf
+echo '    Require all denied' >> httpd.conf
+echo '</Files>' >> httpd.conf
+echo 'ErrorLog "logs/error_log"' >> httpd.conf
+echo 'LogLevel warn' >> httpd.conf
+echo '<IfModule log_config_module>' >> httpd.conf
+echo '    LogFormat "%h %l %u %t \"%r\" %>s %b \"%{Referer}i\" \"%{User-Agent}i\"" combined' >> httpd.conf
+echo '    LogFormat "%h %l %u %t \"%r\" %>s %b" common' >> httpd.conf
+echo '    <IfModule logio_module>' >> httpd.conf
+echo '      LogFormat "%h %l %u %t \"%r\" %>s %b \"%{Referer}i\" \"%{User-Agent}i\" %I %O" combinedio' >> httpd.conf
+echo '    </IfModule>' >> httpd.conf
+echo '    CustomLog "logs/access_log" combined' >> httpd.conf
+echo '</IfModule>' >> httpd.conf
+echo '<IfModule alias_module>' >> httpd.conf
+echo '    ScriptAlias /cgi-bin/ "/var/www/cgi-bin/"' >> httpd.conf
+echo '</IfModule>' >> httpd.conf
+echo '<Directory "/var/www/cgi-bin">' >> httpd.conf
+echo '    AllowOverride None' >> httpd.conf
+echo '    Options None' >> httpd.conf
+echo '    Require all granted' >> httpd.conf
+echo '</Directory>' >> httpd.conf
+echo '<IfModule mime_module>' >> httpd.conf
+echo '    TypesConfig /etc/mime.types' >> httpd.conf
+echo '    AddType application/x-compress .Z' >> httpd.conf
+echo '    AddType application/x-gzip .gz .tgz' >> httpd.conf
+echo '    AddType text/html .shtml' >> httpd.conf
+echo '    AddOutputFilter INCLUDES .shtml' >> httpd.conf
+echo '</IfModule>' >> httpd.conf
+echo 'AddDefaultCharset UTF-8' >> httpd.conf
+echo '<IfModule mime_magic_module>' >> httpd.conf
+echo '    MIMEMagicFile conf/magic' >> httpd.conf
+echo '</IfModule>' >> httpd.conf
+echo 'EnableSendfile on' >> httpd.conf
+echo 'IncludeOptional conf.d/*.conf' >> httpd.conf
+
+# 6. 기존의 httpd.conf 파일을 백업후 위에서 만든 파일 붙여넣기
+cp /etc/httpd/conf/httpd.conf /etc/httpd/conf/httpd.conf.backup
+rm -f /etc/httpd/conf/httpd.conf
+cp ./httpd.conf /etc/httpd/conf/
+
+
+# 7. Apache 재시작
+service httpd restart
